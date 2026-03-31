@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ghost Night Sky</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #08090f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: sans-serif;
+    }
+
+    #stage {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      cursor: none;
+      background: #08090f;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 20px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+
+  <svg id="ghost-svg" width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible;">
+    <g id="trail-group"></g>
+    <g id="ghost-group">
+      <path id="ghost-body" d=""
+        fill="rgba(255,255,255,0.92)"
+        stroke="rgba(255,255,255,0.3)"
+        stroke-width="1"
+        stroke-linejoin="round"/>
+      <circle id="eye-l" r="5" fill="#08090f"/>
+      <circle id="eye-r" r="5" fill="#08090f"/>
+      <circle id="pupil-l" r="2.5" fill="white"/>
+      <circle id="pupil-r" r="2.5" fill="white"/>
+      <ellipse id="mouth" cx="0" cy="8" rx="6" ry="3.5"
+        fill="none"
+        stroke="rgba(255,255,255,0.35)"
+        stroke-width="1.2"/>
+    </g>
+  </svg>
+
+  <div class="hint">move your cursor around</div>
+</div>
+
+<script>
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = stage.offsetWidth;
+    canvas.height = stage.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  /* ── Stars ── */
+  const STAR_COUNT = 180;
+  const stars = Array.from({ length: STAR_COUNT }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: Math.random() * 1.4 + 0.3,
+    alpha: Math.random() * 0.6 + 0.3,
+    twinkleSpeed: Math.random() * 0.02 + 0.005,
+    twinkleOffset: Math.random() * Math.PI * 2
+  }));
+
+  const MOON = { x: 0.82, y: 0.14, r: 28 };
+  let tick = 0;
+
+  function drawBg() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    /* base sky */
+    ctx.fillStyle = '#08090f';
+    ctx.fillRect(0, 0, W, H);
+
+    /* purple nebula haze */
+    const grad = ctx.createRadialGradient(W * 0.5, H * 0.8, 0, W * 0.5, H * 0.8, H * 0.7);
+    grad.addColorStop(0, 'rgba(20,18,60,0.6)');
+    grad.addColorStop(1, 'rgba(8,9,15,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    /* twinkling stars */
+    for (const s of stars) {
+      const tw = Math.sin(tick * s.twinkleSpeed + s.twinkleOffset);
+      const a = Math.max(0, Math.min(1, s.alpha + tw * 0.25));
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fill();
+    }
+
+    /* moon glow */
+    const mx = MOON.x * W, my = MOON.y * H, mr = MOON.r;
+    const moonGlow = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 2.5);
+    moonGlow.addColorStop(0, 'rgba(220,230,255,0.12)');
+    moonGlow.addColorStop(1, 'rgba(220,230,255,0)');
+    ctx.fillStyle = moonGlow;
+    ctx.beginPath();
+    ctx.arc(mx, my, mr * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* crescent moon */
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, Math.PI * 2);
+    ctx.fillStyle = '#dce6ff';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(mx + mr * 0.28, my - mr * 0.1, mr * 0.82, 0, Math.PI * 2);
+    ctx.fillStyle = '#13151f';
+    ctx.fill();
+
+    tick++;
+    requestAnimationFrame(drawBg);
+  }
+  drawBg();
+
+  /* ── Ghost ── */
+  const W_G = 36, H_G = 44;
+  const TRAIL_COUNT = 8;
+  const trail = [];
+  const trailGroup = document.getElementById('trail-group');
+
+  for (let i = 0; i < TRAIL_COUNT; i++) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const a = (0.22 - i * 0.025).toFixed(2);
+    body.setAttribute('fill', `rgba(255,255,255,${a})`);
+    g.appendChild(body);
+    trailGroup.appendChild(g);
+    trail.push({ g, body, x: window.innerWidth / 2, y: window.innerHeight / 2, scale: 1 - i * 0.09 });
+  }
+
+  function ghostPath(w, h) {
+    const hw = w / 2;
+    const top = -h / 2, bot = h / 2;
+    const nw = 3, ww = w / nw;
+    let d = `M ${-hw} ${bot} L ${-hw} ${top + hw} Q ${-hw} ${top} 0 ${top} Q ${hw} ${top} ${hw} ${top + hw} L ${hw} ${bot}`;
+    for (let i = nw - 1; i >= 0; i--) {
+      const x1 = -hw + (i + 1) * ww;
+      const x0 = -hw + i * ww;
+      d += ` Q ${(x0 + x1) / 2} ${bot + 11} ${x0} ${bot}`;
+    }
+    return d + ' Z';
+  }
+
+  let gx = window.innerWidth / 2, gy = window.innerHeight / 2;
+  let vx = 0, vy = 0;
+  let mx = gx, my = gy;
+  let wobble = 0, tiltAngle = 0;
+
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+  const ghostBody  = document.getElementById('ghost-body');
+  const eyeL       = document.getElementById('eye-l');
+  const eyeR       = document.getElementById('eye-r');
+  const pupilL     = document.getElementById('pupil-l');
+  const pupilR     = document.getElementById('pupil-r');
+  const mouth      = document.getElementById('mouth');
+  const ghostGroup = document.getElementById('ghost-group');
+
+  function animateGhost() {
+    wobble += 0.045;
+    const wb = Math.sin(wobble) * 4;
+
+    const dx = mx - gx, dy = my - gy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+    vx += dx * 0.045; vy += dy * 0.045;
+    vx *= 0.76;       vy *= 0.76;
+    gx += vx;         gy += vy;
+
+    const speed = Math.sqrt(vx * vx + vy * vy);
+    tiltAngle += (vx * 1.4 - tiltAngle) * 0.14;
+
+    const sx = 1 + speed * 0.009;
+    const sy = 1 - speed * 0.006;
+    const eox = (dx / dist) * 2.5;
+    const eoy = (dy / dist) * 2;
+
+    ghostBody.setAttribute('d', ghostPath(W_G, H_G));
+    eyeL.setAttribute('cx', -7);      eyeL.setAttribute('cy', -6);
+    eyeR.setAttribute('cx',  7);      eyeR.setAttribute('cy', -6);
+    pupilL.setAttribute('cx', -7 + eox); pupilL.setAttribute('cy', -6 + eoy);
+    pupilR.setAttribute('cx',  7 + eox); pupilR.setAttribute('cy', -6 + eoy);
+    mouth.setAttribute('ry', speed > 5 ? 2 : 3.5);
+
+    ghostGroup.setAttribute('transform',
+      `translate(${gx},${gy + wb}) rotate(${tiltAngle * 0.4}) scale(${sx},${sy})`);
+
+    trail[0].x += (gx - trail[0].x) * 0.38;
+    trail[0].y += (gy - trail[0].y) * 0.38;
+    for (let i = 1; i < TRAIL_COUNT; i++) {
+      trail[i].x += (trail[i - 1].x - trail[i].x) * 0.28;
+      trail[i].y += (trail[i - 1].y - trail[i].y) * 0.28;
+    }
+    for (let i = 0; i < TRAIL_COUNT; i++) {
+      const s = trail[i].scale;
+      trail[i].body.setAttribute('d', ghostPath(W_G * s * 0.72, H_G * s * 0.72));
+      trail[i].g.setAttribute('transform',
+        `translate(${trail[i].x},${trail[i].y + wb * s})`);
+    }
+
+    requestAnimationFrame(animateGhost);
+  }
+
+  animateGhost();
+</script>
+</body>
+</html>
